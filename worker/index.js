@@ -43,6 +43,7 @@ const staticAssetPaths = new Set([...indexablePaths, '/checkout/done'])
 function securityHeaders(request) {
   const headers = new Headers({
     'X-Content-Type-Options': 'nosniff',
+    'X-VoiceAIAgent-Site': 'voiceaiagent.space',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
