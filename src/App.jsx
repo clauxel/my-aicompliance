@@ -138,6 +138,7 @@ export default function App() {
       popup.document.write(
         '<!doctype html><title>Secure checkout</title><body style="font-family:Arial,sans-serif;padding:28px;background:#f4f8f6;color:#0b2323"><h1>Opening secure checkout...</h1><p>You can keep AI Compliance open in the original tab.</p></body>',
       )
+      popup.document.close()
     }
 
     try {
@@ -152,7 +153,7 @@ export default function App() {
       }
       setPayment({ open: true, loading: false, error: '', url: payload.checkoutUrl })
       if (popup && !popup.closed) {
-        popup.location.href = payload.checkoutUrl
+        popup.location.assign(payload.checkoutUrl)
       } else {
         window.open(payload.checkoutUrl, 'creemCheckout', centeredPopupFeatures(560, 760))
       }
