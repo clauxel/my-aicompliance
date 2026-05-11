@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f4f8f6"/>
+  <rect x="72" y="70" width="1056" height="490" rx="28" fill="#0b3b3a"/>
+  <rect x="112" y="112" width="430" height="88" rx="18" fill="#ffffff" fill-opacity=".1"/>
+  <text x="136" y="153" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#d8f35a" font-weight="700">AI Compliance</text>
+  <text x="136" y="184" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#e8f3ef">EU AI Act readiness scanner</text>
+  <text x="112" y="284" font-family="Arial, Helvetica, sans-serif" font-size="64" fill="#ffffff" font-weight="800">Scan risk. Close gaps.</text>
+  <text x="112" y="344" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#c8dfd8">Prepare before 2 August 2026.</text>
+  <rect x="675" y="112" width="360" height="390" rx="24" fill="#ffffff"/>
+  <rect x="710" y="152" width="180" height="20" rx="10" fill="#0b3b3a"/>
+  <rect x="710" y="194" width="270" height="18" rx="9" fill="#d8e4e0"/>
+  <rect x="710" y="236" width="280" height="64" rx="14" fill="#fff3d1"/>
+  <text x="734" y="275" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#6b4400" font-weight="700">High-risk signal</text>
+  <rect x="710" y="326" width="280" height="22" rx="11" fill="#d8f35a"/>
+  <rect x="710" y="368" width="230" height="18" rx="9" fill="#d8e4e0"/>
+  <rect x="710" y="408" width="250" height="18" rx="9" fill="#d8e4e0"/>
+  <rect x="710" y="450" width="145" height="34" rx="17" fill="#0b3b3a"/>
+</svg>
