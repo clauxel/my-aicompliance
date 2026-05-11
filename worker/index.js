@@ -351,8 +351,9 @@ export function buildSitemapXml() {
     .map((path) => {
       const priority = path === '/' ? '1.0' : path === '/privacy' || path === '/terms' ? '0.35' : '0.78'
       const changefreq = path === '/' ? 'weekly' : 'monthly'
+      const locPath = path === '/' ? '/' : `${path}/`
       return `  <url>
-    <loc>${CANONICAL_ORIGIN}${path === '/' ? '/' : path}</loc>
+    <loc>${CANONICAL_ORIGIN}${locPath}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
