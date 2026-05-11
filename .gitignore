@@ -22,6 +22,7 @@
 # Public assets.
 !static-public/
 !static-public/_headers
+!static-public/BingSiteAuth.xml
 !static-public/favicon.svg
 !static-public/voice-ai-agent-dashboard.png
 
