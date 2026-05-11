@@ -2,7 +2,6 @@ name = "my-aicompliance"
 main = "worker/index.js"
 compatibility_date = "2026-05-11"
 account_id = "615b05ce6668dd8e0e2431077fc29c82"
-pages_build_output_dir = "./dist"
 workers_dev = true
 routes = [
   { pattern = "aicompliance.online/*", zone_name = "aicompliance.online" },
