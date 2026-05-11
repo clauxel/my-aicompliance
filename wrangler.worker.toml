@@ -1,0 +1,34 @@
+name = "my-aicompliance"
+main = "worker/index.js"
+compatibility_date = "2026-05-11"
+workers_dev = true
+routes = [
+  { pattern = "voiceaiagent.space/*", zone_name = "voiceaiagent.space" },
+  { pattern = "www.voiceaiagent.space/*", zone_name = "voiceaiagent.space" }
+]
+
+[vars]
+CREEM_API_BASE = "https://api.creem.io"
+CREEM_ENV = "live"
+
+[assets]
+directory = "./dist"
+binding = "SITE_ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = [
+  "/",
+  "/voice-ai-agent-github",
+  "/voice-ai-agent-platform",
+  "/voice-ai-agent-for-developers",
+  "/ai-voice-agents-india",
+  "/voice-ai-agent-n8n",
+  "/best-ai-voice-agents",
+  "/voice-ai-agents-servicenow",
+  "/ai-voice-agent-open-source",
+  "/pricing",
+  "/privacy",
+  "/terms",
+  "/sitemap.xml",
+  "/robots.txt",
+  "/api/*"
+]
