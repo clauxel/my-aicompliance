@@ -11,6 +11,10 @@ routes = [
 CREEM_API_BASE = "https://api.creem.io"
 CREEM_ENV = "live"
 
+[[kv_namespaces]]
+binding = "ANALYTICS_KV"
+id = "a02b1a4d7089476bab2c2bae1b2a39a4"
+
 [assets]
 directory = "./dist"
 binding = "SITE_ASSETS"
