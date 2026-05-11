@@ -19,20 +19,4 @@ id = "a02b1a4d7089476bab2c2bae1b2a39a4"
 directory = "./dist"
 binding = "SITE_ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = [
-  "/",
-  "/voice-ai-agent-github",
-  "/voice-ai-agent-platform",
-  "/voice-ai-agent-for-developers",
-  "/ai-voice-agents-india",
-  "/voice-ai-agent-n8n",
-  "/best-ai-voice-agents",
-  "/voice-ai-agents-servicenow",
-  "/ai-voice-agent-open-source",
-  "/pricing",
-  "/privacy",
-  "/terms",
-  "/sitemap.xml",
-  "/robots.txt",
-  "/api/*"
-]
+run_worker_first = true
