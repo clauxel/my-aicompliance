@@ -1,3 +1,5 @@
+import { recordAnalyticsEvents } from './analytics.js'
+import { handleNowPaymentsCheckout } from './nowpayments.js'
 const LIVE_ORIGIN = 'https://voiceaiagent.space'
 const LIVE_HOST = 'voiceaiagent.space'
 const ALT_HOSTS = new Set(['www.voiceaiagent.space'])
@@ -84,10 +86,13 @@ function handleOptions(request) {
 }
 
 function maybeRedirectToHttps(requestUrl) {
-  if (requestUrl.protocol !== 'https:') {
-    const redirectUrl = new URL(requestUrl)
-    redirectUrl.protocol = 'https:'
-    return Response.redirect(redirectUrl.toString(), 308)
+  if (requestUrl.hostname === LIVE_HOST || ALT_HOSTS.has(requestUrl.hostname)) {
+    if (requestUrl.protocol !== 'https:' || requestUrl.hostname !== LIVE_HOST) {
+      const redirectUrl = new URL(requestUrl)
+      redirectUrl.protocol = 'https:'
+      redirectUrl.hostname = LIVE_HOST
+      return Response.redirect(redirectUrl.toString(), 301)
+    }
   }
   return null
 }
@@ -286,7 +291,7 @@ function handleRuntime(request, requestUrl) {
       defaultPlan: 'pro',
       defaultBilling: 'annual',
       annualDiscount: '50%',
-      analytics: 'first-party-kv-with-console-fallback',
+      analytics: 'cloudflare-d1',
       ts: Date.now(),
     },
     200,
@@ -315,24 +320,12 @@ async function handleAnalytics(request, env) {
   let persisted = false
   let store = 'console'
   try {
-    if (env?.ANALYTICS_KV?.put && acceptedEvents.length) {
-      const day = receivedAt.slice(0, 10)
-      const hour = receivedAt.slice(11, 13)
-      const batchId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-      await env.ANALYTICS_KV.put(
-        `events/${day}/${hour}/${batchId}.json`,
-        JSON.stringify({
-          site: 'voiceaiagent.space',
-          receivedAt,
-          country,
-          accepted: acceptedEvents.length,
-          events: acceptedEvents,
-        }),
-        { expirationTtl: 60 * 60 * 24 * 180 },
-      )
-      persisted = true
-      store = 'kv'
-    }
+    const result = await recordAnalyticsEvents(env, acceptedEvents, {
+      siteKey: 'voiceaiagent',
+      requestUrl: new URL(request.url),
+    })
+    persisted = result.persisted
+    store = persisted ? 'd1' : 'console'
   } catch (error) {
     console.log(JSON.stringify({ type: 'analytics_store_error', site: 'voiceaiagent.space', message: String(error?.message || error) }))
     persisted = false
@@ -401,6 +394,14 @@ function handleIndexNowKey(request) {
   return new Response(INDEXNOW_KEY, { status: 200, headers })
 }
 
+function noIndexNotFoundResponse(request) {
+  const headers = securityHeaders(request)
+  headers.set('Content-Type', 'text/html; charset=utf-8')
+  headers.set('Cache-Control', 'no-store')
+  headers.set('X-Robots-Tag', 'noindex, nofollow')
+  return new Response('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>Page not found</title></head><body><main><h1>Page not found</h1><p>This URL is not a public page for this product.</p></main></body></html>', { status: 404, headers })
+}
+
 async function fetchAsset(request, env) {
   if (env?.SITE_ASSETS?.fetch) {
     const requestUrl = new URL(request.url)
@@ -408,7 +409,7 @@ async function fetchAsset(request, env) {
 
     if (staticAssetPaths.has(normalizedPath)) {
       const assetUrl = new URL(request.url)
-      assetUrl.pathname = normalizedPath === '/' ? '/' : `${normalizedPath}/index.html`
+      assetUrl.pathname = normalizedPath === '/' ? '/' : `${normalizedPath}/`
       const assetResponse = await env.SITE_ASSETS.fetch(new Request(assetUrl.toString(), request))
       if (assetResponse.status !== 404) return assetResponse
     }
@@ -426,6 +427,18 @@ export async function handleRequest(request, env) {
   const requestUrl = new URL(request.url)
 
   if (request.method === 'OPTIONS') return handleOptions(request)
+
+  if (requestUrl.pathname === '/api/nowpayments-checkout') {
+    return handleNowPaymentsCheckout(request, env, {
+      plans: planCatalog,
+      defaultPlanId: 'pro',
+      siteName: 'voiceaiagent',
+      siteKey: 'voiceaiagent',
+      annualDiscountMultiplier: typeof ANNUAL_DISCOUNT_MULTIPLIER !== 'undefined'
+        ? ANNUAL_DISCOUNT_MULTIPLIER
+        : (typeof annualBillingMultiplier !== 'undefined' ? annualBillingMultiplier : 0.5),
+    })
+  }
 
   if (requestUrl.pathname === '/api/runtime') return handleRuntime(request, requestUrl)
   if (requestUrl.pathname === '/api/checkout') return handleCheckout(request, env, requestUrl)
