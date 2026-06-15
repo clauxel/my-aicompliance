@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://aicompliance.online/sitemap.xml
+Allow: /llms.txt

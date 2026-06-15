@@ -127,11 +127,11 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  async function openCheckout(planId = selectedPlan, cycle = billing) {
+  async function openCheckout(planId = selectedPlan, cycle = billing, provider = 'nowpayments') {
     setSelectedPlan(planId)
     setBilling(cycle)
     setPayment({ open: true, loading: true, error: '', url: '' })
-    trackEvent('checkout_click', { planId, billing: cycle })
+    trackEvent('checkout_click', { planId, billing: cycle, paymentProvider: provider })
 
     const popup = window.open('', 'creemCheckout', centeredPopupFeatures(560, 760))
     if (popup) {
@@ -142,7 +142,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch('/api/checkout', {
+      const response = await fetch(provider === 'nowpayments' ? '/api/nowpayments-checkout' : '/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId, billing: cycle }),
@@ -199,12 +199,12 @@ export default function App() {
               the Pro annual plan already selected.
             </p>
             <div className="hero-actions">
-              <a className="btn btn-primary" href="#scanner">
-                Run the scan <ArrowRight size={18} />
-              </a>
-              <button className="btn btn-quiet" type="button" onClick={() => openCheckout('pro', 'annual')}>
-                Choose Pro annual
+              <button className="btn btn-primary" type="button" onClick={() => openCheckout('pro', 'annual')}>
+                Choose Pro annual <ArrowRight size={18} />
               </button>
+              <a className="btn btn-quiet" href="#pricing">
+                Review plans
+              </a>
             </div>
             <div className="trust-row" aria-label="Compliance proof points">
               <span>
@@ -318,7 +318,7 @@ function SiteShell({ children, navigate, onCheckout }) {
           <a href="/#pricing">Pricing</a>
           <a href="/#resources">Resources</a>
           <button type="button" onClick={onCheckout}>
-            Checkout
+            Choose Pro annual
           </button>
         </nav>
       </header>
@@ -486,13 +486,13 @@ function Pricing({ billing, setBilling, selectedPlan, openCheckout }) {
     <section className="section pricing-section" id="pricing">
       <div className="section-heading">
         <p className="eyebrow">Pricing</p>
-        <h2>Start with Pro annual selected.</h2>
+        <h2>Pro annual is selected by default.</h2>
         <p>Annual billing is 50% lower than paying month to month.</p>
       </div>
 
       <div className="billing-toggle" role="group" aria-label="Billing cycle">
         <button className={annual ? 'active' : ''} type="button" onClick={() => setBilling('annual')}>
-          Annual - save 50%
+          Annual - 50% off
         </button>
         <button className={!annual ? 'active' : ''} type="button" onClick={() => setBilling('monthly')}>
           Monthly
@@ -527,7 +527,14 @@ function Pricing({ billing, setBilling, selectedPlan, openCheckout }) {
                 type="button"
                 onClick={() => openCheckout(plan.id, billing)}
               >
-                Checkout <ArrowRight size={18} />
+                {plan.id === 'pro' ? `Checkout Pro ${billing}` : `Checkout ${plan.name} ${billing}`} <ArrowRight size={18} />
+              </button>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => openCheckout(plan.id, billing, 'nowpayments')}
+              >
+                Pay with USDC Wallet
               </button>
             </article>
           )
@@ -749,7 +756,7 @@ function CheckoutOverlay({ payment, setPayment }) {
           <X size={18} />
         </button>
         <p className="eyebrow">Secure checkout</p>
-        <h2>{payment.error ? 'Checkout needs attention' : payment.loading ? 'Opening Creem checkout' : 'Checkout is open'}</h2>
+        <h2>{payment.error ? 'Checkout needs attention' : payment.loading ? 'Opening NOWPayments checkout' : 'Checkout is open'}</h2>
         <p>
           {payment.error
             ? payment.error

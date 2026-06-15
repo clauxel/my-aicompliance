@@ -33,7 +33,7 @@ const planCatalog = {
   },
 }
 
-const indexablePaths = ['/', ...keywordPages.map((page) => page.path), '/privacy', '/terms']
+const indexablePaths = ['/', ...keywordPages.map((page) => page.path), '/pricing', '/resources', '/privacy', '/terms']
 const staticAssetPaths = new Set([...indexablePaths])
 
 export function securityHeaders() {
@@ -76,10 +76,10 @@ function textResponse(body) {
 }
 
 function maybeRedirectToHttps(requestUrl, request) {
-  if (typeof isLocalDevRequest === 'function' && isLocalDevRequest(request)) return null
+  if (typeof isLocalDevRequest === 'function' && request && isLocalDevRequest(request)) return null
   const canonicalUrl = new URL(CANONICAL_ORIGIN)
   const isKnownHost = typeof CANONICAL_HOSTS !== 'undefined' && CANONICAL_HOSTS.has(requestUrl.hostname)
-  if (isKnownHost && (requestUrl.protocol !== 'https:' || requestUrl.hostname !== canonicalUrl.hostname)) {
+  if (isKnownHost && requestUrl.hostname !== canonicalUrl.hostname) {
     const redirectUrl = new URL(requestUrl)
     redirectUrl.protocol = 'https:'
     redirectUrl.hostname = canonicalUrl.hostname
@@ -222,42 +222,15 @@ function extractCheckoutUrl(payload) {
 }
 
 export async function handleCheckout(request, env, requestUrl = new URL(request.url)) {
-  if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed.' }, 405)
-
-  const apiKey = await firstSecretEnv(env, 'API_PROD_KEY', 'CREEM_API_KEY', 'CREEM_KEY')
-  if (!apiKey) return jsonResponse({ ok: false, error: 'Payment is not configured yet.' }, 503)
-
-  let body
-  try {
-    body = await request.json()
-  } catch {
-    return jsonResponse({ ok: false, error: 'Invalid JSON body.' }, 400)
-  }
-
-  const planId = typeof body?.planId === 'string' ? body.planId : 'pro'
-  const billing = body?.billing === 'monthly' ? 'monthly' : 'annual'
-  const plan = planCatalog[planId] || planCatalog.pro
-  const successUrl = `${resolvePublicAppOrigin(requestUrl)}/?checkout=success`
-
-  try {
-    const productId = await getOrCreateCreemProduct(env, apiKey, plan, billing, successUrl)
-    const checkout = await requestCreemJson(apiKey, `${resolveCreemBase(env)}/v1/checkouts`, {
-      product_id: productId,
-      units: 1,
-      success_url: successUrl,
-      request_id: `aicompliance_${plan.id}_${billing}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      metadata: {
-        site: 'aicompliance.online',
-        planId: plan.id,
-        billing,
-      },
-    })
-    const checkoutUrl = extractCheckoutUrl(checkout)
-    if (!checkoutUrl) throw new Error('Creem did not return a checkout URL.')
-    return jsonResponse({ ok: true, checkoutUrl })
-  } catch {
-    return jsonResponse({ ok: false, error: 'Secure checkout could not be created yet.' }, 502)
-  }
+  return handleNowPaymentsCheckout(request, env, {
+    plans: planCatalog,
+    defaultPlanId: 'pro',
+    siteName: 'aicompliance',
+    siteKey: 'aicompliance',
+    annualDiscountMultiplier: typeof ANNUAL_DISCOUNT_MULTIPLIER !== 'undefined'
+      ? ANNUAL_DISCOUNT_MULTIPLIER
+      : (typeof annualBillingMultiplier !== 'undefined' ? annualBillingMultiplier : 0.5),
+  })
 }
 
 export function handleRuntime(requestUrl = new URL(CANONICAL_ORIGIN)) {
@@ -265,7 +238,7 @@ export function handleRuntime(requestUrl = new URL(CANONICAL_ORIGIN)) {
     ok: true,
     publicAppOrigin: resolvePublicAppOrigin(requestUrl),
     deployment: 'cloudflare-workers-assets',
-    paymentProvider: 'creem',
+    paymentProvider: 'nowpayments',
     ts: Date.now(),
   })
 }
@@ -404,9 +377,13 @@ async function fetchAsset(request, env) {
 
     if (staticAssetPaths.has(normalizedPath)) {
       const assetUrl = new URL(request.url)
-      assetUrl.pathname = normalizedPath === '/' ? '/index.html' : `${normalizedPath}/index.html`
+      assetUrl.pathname = normalizedPath === '/' ? '/' : `${normalizedPath}/`
       const assetResponse = await env.ASSETS.fetch(new Request(assetUrl.toString(), request))
       if (assetResponse.status !== 404) return withSecurityHeaders(assetResponse)
+    }
+
+    if (normalizedPath !== '/' && !/\.[a-z0-9]+$/i.test(normalizedPath) && !staticAssetPaths.has(normalizedPath)) {
+      return noIndexNotFoundResponse(request)
     }
 
     return withSecurityHeaders(await env.ASSETS.fetch(request))
@@ -421,7 +398,7 @@ async function fetchAsset(request, env) {
 export async function handleRequest(request, env) {
   const requestUrl = new URL(request.url)
 
-  if (requestUrl.pathname === '/api/nowpayments-checkout') {
+  if (requestUrl.pathname === '/api/nowpayments-checkout' || requestUrl.pathname === '/api/checkout') {
     return handleNowPaymentsCheckout(request, env, {
       plans: planCatalog,
       defaultPlanId: 'pro',
@@ -434,12 +411,11 @@ export async function handleRequest(request, env) {
   }
 
   if (requestUrl.pathname === '/api/runtime') return handleRuntime(requestUrl)
-  if (requestUrl.pathname === '/api/checkout') return handleCheckout(request, env, requestUrl)
   if (requestUrl.pathname === '/api/scan') return handleScan(request, env)
   if (requestUrl.pathname === '/api/reminder') return handleReminder(request, env)
   if (requestUrl.pathname === '/api/analytics') return handleAnalytics(request, env)
 
-  const httpsRedirect = maybeRedirectToHttps(requestUrl)
+  const httpsRedirect = maybeRedirectToHttps(requestUrl, request)
   if (httpsRedirect) return httpsRedirect
 
   if (requestUrl.pathname === '/sitemap.xml') return handleSitemap()

@@ -189,7 +189,7 @@ function buildHomePrerender() {
           <p class="eyebrow">AI Compliance for EU AI Act readiness</p>
           <h1>Find high-risk AI systems before the 2026 deadline finds you.</h1>
           <p class="lede">Run a 30-minute AI Compliance scan, classify likely EU AI Act risk, export a gap report, and start with the Pro annual plan already selected.</p>
-          <p><a class="btn btn-primary" href="#scanner">Run the scan</a></p>
+          <p><a class="btn btn-primary" href="/#pricing">Choose Pro annual</a></p>
         </div>
         <section class="scanner-panel">
           <p class="eyebrow">Live scan</p>
