@@ -1,43 +1,48 @@
 import { recordAnalyticsEvents } from './analytics.js'
-import { handlePolarCheckout } from './polar.js'
-const LIVE_ORIGIN = 'https://voiceaiagent.space'
-const LIVE_HOST = 'voiceaiagent.space'
-const ALT_HOSTS = new Set(['www.voiceaiagent.space'])
+import { handlePolarCheckout, isPolarCheckoutConfigured } from './polar.js'
+import { keywordPages } from '../src/content/keyword-pages.js'
+
+const LIVE_ORIGIN = 'https://aicompliance.online'
+const LIVE_HOST = 'aicompliance.online'
+const ALT_HOSTS = new Set(['www.aicompliance.online'])
 const ANNUAL_DISCOUNT_MULTIPLIER = 0.5
 const INDEXNOW_KEY = '8b3a6f0d2e7c4a91b5f38c6d0a12ef44'
 
 const polarProductCache = new Map()
 
 const planCatalog = {
-  starter: {
-    id: 'starter',
-    name: 'Starter',
+  basic: {
+    id: 'basic',
+    name: 'Basic',
     monthlyAmountCents: 9900,
     currency: 'USD',
-    summary: 'AI receptionist for one dental clinic plus usage-based minutes',
+    summary: 'AI Compliance readiness scan for a first inventory and executive review.',
   },
   pro: {
     id: 'pro',
     name: 'Pro',
-    monthlyAmountCents: 24900,
+    monthlyAmountCents: 29900,
     currency: 'USD',
-    summary: 'default clinic workflow with 1000 minutes and lower minute rate',
+    summary: 'AI Compliance readiness workflow for teams preparing the 2026 deadline.',
+  },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Enterprise',
+    monthlyAmountCents: 49900,
+    currency: 'USD',
+    summary: 'AI Compliance portfolio review for cross-border governance teams.',
   },
 }
 
 const indexablePaths = [
   '/',
-  '/voice-ai-agent-github',
-  '/voice-ai-agent-platform',
-  '/voice-ai-agent-for-developers',
-  '/ai-voice-agents-india',
-  '/voice-ai-agent-n8n',
-  '/best-ai-voice-agents',
-  '/voice-ai-agents-servicenow',
-  '/ai-voice-agent-open-source',
   '/pricing',
+  '/checkout',
+  '/resources',
+  ...keywordPages.map((page) => page.path),
   '/privacy',
   '/terms',
+  '/llms.txt',
 ]
 
 const staticAssetPaths = new Set([...indexablePaths, '/checkout/done'])
@@ -45,7 +50,7 @@ const staticAssetPaths = new Set([...indexablePaths, '/checkout/done'])
 function securityHeaders(request) {
   const headers = new Headers({
     'X-Content-Type-Options': 'nosniff',
-    'X-VoiceAIAgent-Site': 'voiceaiagent.space',
+    'X-AICompliance-Site': 'aicompliance.online',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -149,11 +154,11 @@ function formatMoney(amountCents, currency) {
 
 function resolveConfiguredProductId(env, planId, billing) {
   const cycle = billing === 'monthly' ? 'MONTHLY' : 'YEARLY'
-  const tier = planId === 'starter' ? 'STARTER' : 'PRO'
+  const tier = planId === 'basic' ? 'BASIC' : planId === 'enterprise' ? 'ENTERPRISE' : 'PRO'
   const normalizedSelection = normalizeEnvKey(`${planId}_${billing}`)
   const keys = [
-    `POLAR_PRODUCT_VOICEAIAGENT_${tier}_${cycle}`,
-    `POLAR_PRODUCT_ID_VOICEAIAGENT_${normalizedSelection}`,
+    `POLAR_PRODUCT_AICOMPLIANCE_${tier}_${cycle}`,
+    `POLAR_PRODUCT_ID_AICOMPLIANCE_${normalizedSelection}`,
     `POLAR_PRODUCT_ID_${normalizedSelection}`,
     `POLAR_PRODUCT_ID_${tier}`,
     'POLAR_PRODUCT_ID',
@@ -210,7 +215,7 @@ async function getOrCreatePolarProduct(env, apiKey, plan, billing, successUrl) {
   const billingLabel = billing === 'annual' ? 'annual' : 'monthly'
 
   const product = await requestPolarJson(apiKey, `${resolvePolarBase(env)}/v1/products`, {
-    name: `Voice AI Agent ${plan.name} (${billingLabel})`,
+    name: `AI Compliance ${plan.name} (${billingLabel})`,
     description: `${formatMoney(monthlyAmountCents, plan.currency)}/mo - ${plan.summary}`,
     price: totalAmountCents,
     currency: plan.currency,
@@ -253,7 +258,15 @@ async function handleCheckout(request, env, requestUrl) {
   }
 
   const requestedPlanId = typeof body?.planId === 'string' ? body.planId : 'pro'
-  const planId = requestedPlanId === 'starter' ? 'starter' : 'pro'
+  const planAliases = {
+    starter: 'basic',
+    basic: 'basic',
+    team: 'pro',
+    pro: 'pro',
+    platform: 'enterprise',
+    enterprise: 'enterprise',
+  }
+  const planId = planAliases[requestedPlanId] || 'pro'
   const billing = body?.billing === 'monthly' ? 'monthly' : 'annual'
   const plan = planCatalog[planId]
   const successUrl = `${resolvePublicAppOrigin(requestUrl)}/checkout/done`
@@ -264,9 +277,9 @@ async function handleCheckout(request, env, requestUrl) {
       product_id: productId,
       units: 1,
       success_url: successUrl,
-      request_id: `voiceaiagent_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      request_id: `aicompliance_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       metadata: {
-        site: 'voiceaiagent.space',
+        site: 'aicompliance.online',
         planId: plan.id,
         billing,
         defaultPlan: plan.id === 'pro',
@@ -276,18 +289,19 @@ async function handleCheckout(request, env, requestUrl) {
     if (!checkoutUrl) throw new Error('Polar did not return a checkout URL.')
     return jsonResponse({ ok: true, checkoutUrl }, 200, request)
   } catch (error) {
-    console.log(JSON.stringify({ type: 'checkout_error', site: 'voiceaiagent.space', message: String(error?.message || error) }))
+    console.log(JSON.stringify({ type: 'checkout_error', site: 'aicompliance.online', message: String(error?.message || error) }))
     return jsonResponse({ ok: false, error: 'Secure checkout could not be created yet.' }, 502, request)
   }
 }
 
-function handleRuntime(request, requestUrl) {
+async function handleRuntime(request, env, requestUrl) {
   return jsonResponse(
     {
       ok: true,
       publicAppOrigin: resolvePublicAppOrigin(requestUrl),
       deployment: 'cloudflare-workers-assets',
       paymentProvider: 'polar',
+      paymentConfigured: await isPolarCheckoutConfigured(env, { plans: planCatalog, defaultPlanId: 'pro', defaultBilling: 'annual', annualDiscountMultiplier: ANNUAL_DISCOUNT_MULTIPLIER }),
       defaultPlan: 'pro',
       defaultBilling: 'annual',
       annualDiscount: '50%',
@@ -321,20 +335,20 @@ async function handleAnalytics(request, env) {
   let store = 'console'
   try {
     const result = await recordAnalyticsEvents(env, acceptedEvents, {
-      siteKey: 'voiceaiagent',
+      siteKey: 'aicompliance',
       requestUrl: new URL(request.url),
     })
     persisted = result.persisted
     store = persisted ? 'd1' : 'console'
   } catch (error) {
-    console.log(JSON.stringify({ type: 'analytics_store_error', site: 'voiceaiagent.space', message: String(error?.message || error) }))
+    console.log(JSON.stringify({ type: 'analytics_store_error', site: 'aicompliance.online', message: String(error?.message || error) }))
     persisted = false
   }
 
   console.log(
     JSON.stringify({
       type: 'analytics',
-      site: 'voiceaiagent.space',
+      site: 'aicompliance.online',
       accepted: acceptedEvents.length,
       persisted,
       store,
@@ -345,7 +359,7 @@ async function handleAnalytics(request, env) {
   return jsonResponse({ ok: true, accepted: acceptedEvents.length, persisted, store }, 202, request)
 }
 
-function buildSitemapXml() {
+export function buildSitemapXml() {
   const today = new Date().toISOString().slice(0, 10)
   const urls = indexablePaths
     .map((path) => {
@@ -374,16 +388,20 @@ function handleSitemap(request) {
   return new Response(buildSitemapXml(), { status: 200, headers })
 }
 
-function handleRobots(request) {
-  const headers = securityHeaders(request)
-  headers.set('Content-Type', 'text/plain; charset=utf-8')
-  headers.set('Cache-Control', 'public, max-age=3600')
-  const body = `User-agent: *
+export function buildRobotsTxt() {
+  return `User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /checkout/done
 Sitemap: ${LIVE_ORIGIN}/sitemap.xml
 `
+}
+
+function handleRobots(request) {
+  const headers = securityHeaders(request)
+  headers.set('Content-Type', 'text/plain; charset=utf-8')
+  headers.set('Cache-Control', 'public, max-age=3600')
+  const body = buildRobotsTxt()
   return new Response(body, { status: 200, headers })
 }
 
@@ -432,15 +450,15 @@ export async function handleRequest(request, env) {
     return handlePolarCheckout(request, env, {
       plans: planCatalog,
       defaultPlanId: 'pro',
-      siteName: 'voiceaiagent',
-      siteKey: 'voiceaiagent',
+      siteName: 'AI Compliance',
+      siteKey: 'aicompliance',
       annualDiscountMultiplier: typeof ANNUAL_DISCOUNT_MULTIPLIER !== 'undefined'
         ? ANNUAL_DISCOUNT_MULTIPLIER
         : (typeof annualBillingMultiplier !== 'undefined' ? annualBillingMultiplier : 0.5),
     })
   }
 
-  if (requestUrl.pathname === '/api/runtime') return handleRuntime(request, requestUrl)
+  if (requestUrl.pathname === '/api/runtime') return handleRuntime(request, env, requestUrl)
   if (requestUrl.pathname === '/api/checkout') return handleCheckout(request, env, requestUrl)
   if (requestUrl.pathname === '/api/analytics/events') return handleAnalytics(request, env)
 
@@ -459,7 +477,7 @@ export default {
     try {
       return await handleRequest(request, env)
     } catch (error) {
-      console.log(JSON.stringify({ type: 'worker_error', site: 'voiceaiagent.space', message: String(error?.message || error) }))
+      console.log(JSON.stringify({ type: 'worker_error', site: 'aicompliance.online', message: String(error?.message || error) }))
       return jsonResponse({ ok: false, error: 'Internal server error.' }, 500, request)
     }
   },
