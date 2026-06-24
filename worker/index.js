@@ -421,18 +421,19 @@ function noIndexNotFoundResponse(request) {
 }
 
 async function fetchAsset(request, env) {
-  if (env?.SITE_ASSETS?.fetch) {
+  const assets = env?.SITE_ASSETS || env?.ASSETS
+  if (assets?.fetch) {
     const requestUrl = new URL(request.url)
     const normalizedPath = requestUrl.pathname.replace(/\/+$/, '') || '/'
 
     if (staticAssetPaths.has(normalizedPath)) {
       const assetUrl = new URL(request.url)
       assetUrl.pathname = normalizedPath === '/' ? '/' : `${normalizedPath}/`
-      const assetResponse = await env.SITE_ASSETS.fetch(new Request(assetUrl.toString(), request))
+      const assetResponse = await assets.fetch(new Request(assetUrl.toString(), request))
       if (assetResponse.status !== 404) return assetResponse
     }
 
-    return env.SITE_ASSETS.fetch(request)
+    return assets.fetch(request)
   }
 
   return new Response('Cloudflare asset binding is unavailable.', {

@@ -1,8 +1,8 @@
 # Website Changelog
 
 ## 2026-06-24 15:06 Asia/Shanghai
-- Change summary: Migrated AI Compliance checkout from legacy payment routes to Polar, removed the legacy worker module, aligned Worker domain metadata with `aicompliance.online`, and restored sitemap/robots build exports.
-- Touched files: `index.html`, `src/App.jsx`, `worker/index.js`, `worker/polar.js`, `worker/nowpayments.js`, `wrangler.toml`, `WEBSITE_CHANGELOG.md`.
+- Change summary: Migrated AI Compliance checkout from legacy payment routes to Polar, removed the legacy worker module, aligned Worker domain metadata with `aicompliance.online`, restored sitemap/robots build exports, and made the Worker accept both `SITE_ASSETS` and `ASSETS` bindings.
+- Touched files: `index.html`, `src/App.jsx`, `worker/index.js`, `worker/polar.js`, removed legacy worker module, `wrangler.toml`, `WEBSITE_CHANGELOG.md`.
 - Verification: `npm test`, `node --check worker/index.js`, `node --check worker/polar.js`, `git diff --check`, and targeted legacy payment keyword scans passed.
 - Deployment/Git status: Ready for GitHub push and Cloudflare deployment in the current payment migration batch.
 - Follow-up items: Production checkout should be verified after deploy with configured Polar secrets.
