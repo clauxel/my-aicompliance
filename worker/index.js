@@ -1,102 +1,117 @@
-import { keywordPages } from '../src/content/keyword-pages.js'
-import { classifyAiSystem } from '../src/lib/risk.js'
 import { recordAnalyticsEvents } from './analytics.js'
-import { handleNowPaymentsCheckout } from './nowpayments.js'
-
-const CANONICAL_ORIGIN = 'https://aicompliance.online'
-const CANONICAL_HOSTS = new Set(['aicompliance.online', 'www.aicompliance.online'])
+import { handlePolarCheckout } from './polar.js'
+const LIVE_ORIGIN = 'https://voiceaiagent.space'
+const LIVE_HOST = 'voiceaiagent.space'
+const ALT_HOSTS = new Set(['www.voiceaiagent.space'])
 const ANNUAL_DISCOUNT_MULTIPLIER = 0.5
+const INDEXNOW_KEY = '8b3a6f0d2e7c4a91b5f38c6d0a12ef44'
 
-const creemProductCache = new Map()
+const polarProductCache = new Map()
 
 const planCatalog = {
-  basic: {
-    id: 'basic',
-    name: 'Basic',
+  starter: {
+    id: 'starter',
+    name: 'Starter',
     monthlyAmountCents: 9900,
     currency: 'USD',
-    summary: '3 AI systems, inventory, risk classification, and PDF reporting',
+    summary: 'AI receptionist for one dental clinic plus usage-based minutes',
   },
   pro: {
     id: 'pro',
     name: 'Pro',
-    monthlyAmountCents: 29900,
+    monthlyAmountCents: 24900,
     currency: 'USD',
-    summary: '15 AI systems, DPIA framework, reminders, and priority evidence checklist',
-  },
-  enterprise: {
-    id: 'enterprise',
-    name: 'Enterprise',
-    monthlyAmountCents: 49900,
-    currency: 'USD',
-    summary: 'unlimited AI systems and a consulting call for cross-border teams',
+    summary: 'default clinic workflow with 1000 minutes and lower minute rate',
   },
 }
 
-const indexablePaths = ['/', ...keywordPages.map((page) => page.path), '/pricing', '/resources', '/privacy', '/terms']
-const staticAssetPaths = new Set([...indexablePaths])
+const indexablePaths = [
+  '/',
+  '/voice-ai-agent-github',
+  '/voice-ai-agent-platform',
+  '/voice-ai-agent-for-developers',
+  '/ai-voice-agents-india',
+  '/voice-ai-agent-n8n',
+  '/best-ai-voice-agents',
+  '/voice-ai-agents-servicenow',
+  '/ai-voice-agent-open-source',
+  '/pricing',
+  '/privacy',
+  '/terms',
+]
 
-export function securityHeaders() {
-  return new Headers({
+const staticAssetPaths = new Set([...indexablePaths, '/checkout/done'])
+
+function securityHeaders(request) {
+  const headers = new Headers({
     'X-Content-Type-Options': 'nosniff',
+    'X-VoiceAIAgent-Site': 'voiceaiagent.space',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
   })
+
+  const origin = request?.headers?.get?.('Origin')
+  if (isAllowedCorsOrigin(origin)) {
+    headers.set('Access-Control-Allow-Origin', origin)
+    headers.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    headers.set('Access-Control-Allow-Headers', 'Content-Type')
+    headers.set('Vary', 'Origin')
+  }
+
+  return headers
 }
 
-function withSecurityHeaders(response) {
-  const headers = new Headers(response.headers)
-  for (const [key, value] of securityHeaders()) headers.set(key, value)
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  })
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return false
+
+  try {
+    const url = new URL(origin)
+    if (url.hostname === LIVE_HOST || ALT_HOSTS.has(url.hostname)) return true
+    if (url.hostname.endsWith('.pages.dev') || url.hostname.endsWith('.workers.dev')) return true
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return true
+  } catch {}
+
+  return false
 }
 
-export function jsonResponse(data, status = 200) {
-  const headers = securityHeaders()
+function jsonResponse(data, status = 200, request = null) {
+  const headers = securityHeaders(request)
   headers.set('Content-Type', 'application/json; charset=utf-8')
   return new Response(JSON.stringify(data), { status, headers })
 }
 
-function xmlResponse(body) {
-  const headers = securityHeaders()
-  headers.set('Content-Type', 'application/xml; charset=utf-8')
-  headers.set('Cache-Control', 'public, max-age=3600')
-  return new Response(body, { status: 200, headers })
+function handleOptions(request) {
+  return new Response(null, { status: 204, headers: securityHeaders(request) })
 }
 
-function textResponse(body) {
-  const headers = securityHeaders()
-  headers.set('Content-Type', 'text/plain; charset=utf-8')
-  headers.set('Cache-Control', 'public, max-age=3600')
-  return new Response(body, { status: 200, headers })
-}
-
-function maybeRedirectToHttps(requestUrl, request) {
-  if (typeof isLocalDevRequest === 'function' && request && isLocalDevRequest(request)) return null
-  const canonicalUrl = new URL(CANONICAL_ORIGIN)
-  const isKnownHost = typeof CANONICAL_HOSTS !== 'undefined' && CANONICAL_HOSTS.has(requestUrl.hostname)
-  if (isKnownHost && requestUrl.hostname !== canonicalUrl.hostname) {
-    const redirectUrl = new URL(requestUrl)
-    redirectUrl.protocol = 'https:'
-    redirectUrl.hostname = canonicalUrl.hostname
-    return Response.redirect(redirectUrl.toString(), 301)
+function maybeRedirectToHttps(requestUrl) {
+  if (requestUrl.hostname === LIVE_HOST || ALT_HOSTS.has(requestUrl.hostname)) {
+    if (requestUrl.protocol !== 'https:' || requestUrl.hostname !== LIVE_HOST) {
+      const redirectUrl = new URL(requestUrl)
+      redirectUrl.protocol = 'https:'
+      redirectUrl.hostname = LIVE_HOST
+      return Response.redirect(redirectUrl.toString(), 301)
+    }
   }
   return null
 }
 
 function resolvePublicAppOrigin(requestUrl) {
-  if (CANONICAL_HOSTS.has(requestUrl.hostname)) return `https://${requestUrl.hostname}`
-  if (requestUrl.hostname.endsWith('.workers.dev') || requestUrl.hostname.endsWith('.pages.dev')) return requestUrl.origin
-  return CANONICAL_ORIGIN
+  if (requestUrl.hostname === LIVE_HOST || ALT_HOSTS.has(requestUrl.hostname)) {
+    return `https://${requestUrl.hostname}`
+  }
+
+  if (requestUrl.hostname.endsWith('.pages.dev') || requestUrl.hostname.endsWith('.workers.dev')) {
+    return requestUrl.origin
+  }
+
+  return LIVE_ORIGIN
 }
 
-function resolveCreemBase(env) {
-  const raw = String(env?.CREEM_API_BASE || '').trim()
-  return raw ? raw.replace(/\/+$/, '') : 'https://api.creem.io'
+function resolvePolarBase(env) {
+  const raw = String(env?.POLAR_API_BASE ?? '').trim()
+  return raw ? raw.replace(/\/+$/, '') : 'https://api.polar.sh'
 }
 
 async function getSecretValue(value) {
@@ -134,15 +149,14 @@ function formatMoney(amountCents, currency) {
 
 function resolveConfiguredProductId(env, planId, billing) {
   const cycle = billing === 'monthly' ? 'MONTHLY' : 'YEARLY'
+  const tier = planId === 'starter' ? 'STARTER' : 'PRO'
   const normalizedSelection = normalizeEnvKey(`${planId}_${billing}`)
-  const tier =
-    planId === 'enterprise' ? 'ENTERPRISE' : planId === 'basic' ? 'BASIC' : planId === 'pro' ? 'PRO' : 'PRO'
   const keys = [
-    `CREEM_PRODUCT_AICOMPLIANCE_${tier}_${cycle}`,
-    `CREEM_PRODUCT_ID_AICOMPLIANCE_${normalizedSelection}`,
-    `CREEM_PRODUCT_ID_${normalizedSelection}`,
-    `CREEM_PRODUCT_ID_${tier}`,
-    'CREEM_PRODUCT_ID',
+    `POLAR_PRODUCT_VOICEAIAGENT_${tier}_${cycle}`,
+    `POLAR_PRODUCT_ID_VOICEAIAGENT_${normalizedSelection}`,
+    `POLAR_PRODUCT_ID_${normalizedSelection}`,
+    `POLAR_PRODUCT_ID_${tier}`,
+    'POLAR_PRODUCT_ID',
   ]
 
   for (const key of keys) {
@@ -152,7 +166,7 @@ function resolveConfiguredProductId(env, planId, billing) {
   return ''
 }
 
-async function requestCreemJson(apiKey, url, body) {
+async function requestPolarJson(apiKey, url, body) {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -175,29 +189,29 @@ async function requestCreemJson(apiKey, url, body) {
   if (!response.ok) {
     throw new Error(
       payload && typeof payload === 'object'
-        ? payload.message || payload.error || 'Creem request failed.'
-        : 'Creem request failed.',
+        ? payload.message || payload.error || 'Polar request failed.'
+        : 'Polar request failed.',
     )
   }
 
   return payload || {}
 }
 
-async function getOrCreateCreemProduct(env, apiKey, plan, billing, successUrl) {
+async function getOrCreatePolarProduct(env, apiKey, plan, billing, successUrl) {
   const configuredProductId = resolveConfiguredProductId(env, plan.id, billing)
   if (configuredProductId) return configuredProductId
 
   const cacheKey = `${plan.id}:${billing}`
-  if (creemProductCache.has(cacheKey)) return creemProductCache.get(cacheKey)
+  if (polarProductCache.has(cacheKey)) return polarProductCache.get(cacheKey)
 
-  const effectiveMonthlyCents =
+  const monthlyAmountCents =
     billing === 'annual' ? Math.round(plan.monthlyAmountCents * ANNUAL_DISCOUNT_MULTIPLIER) : plan.monthlyAmountCents
-  const totalAmountCents = billing === 'annual' ? effectiveMonthlyCents * 12 : effectiveMonthlyCents
+  const totalAmountCents = billing === 'annual' ? monthlyAmountCents * 12 : monthlyAmountCents
   const billingLabel = billing === 'annual' ? 'annual' : 'monthly'
 
-  const product = await requestCreemJson(apiKey, `${resolveCreemBase(env)}/v1/products`, {
-    name: `AI Compliance ${plan.name} (${billingLabel})`,
-    description: `${formatMoney(effectiveMonthlyCents, plan.currency)}/mo - ${plan.summary}`,
+  const product = await requestPolarJson(apiKey, `${resolvePolarBase(env)}/v1/products`, {
+    name: `Voice AI Agent ${plan.name} (${billingLabel})`,
+    description: `${formatMoney(monthlyAmountCents, plan.currency)}/mo - ${plan.summary}`,
     price: totalAmountCents,
     currency: plan.currency,
     billing_type: 'onetime',
@@ -207,9 +221,9 @@ async function getOrCreateCreemProduct(env, apiKey, plan, billing, successUrl) {
   })
 
   const productId = product.id || product.product_id
-  if (!productId) throw new Error('Creem did not return a product id.')
+  if (!productId) throw new Error('Polar did not return a product id.')
 
-  creemProductCache.set(cacheKey, productId)
+  polarProductCache.set(cacheKey, productId)
   return productId
 }
 
@@ -221,118 +235,125 @@ function extractCheckoutUrl(payload) {
   return ''
 }
 
-export async function handleCheckout(request, env, requestUrl = new URL(request.url)) {
-  return handleNowPaymentsCheckout(request, env, {
-    plans: planCatalog,
-    defaultPlanId: 'pro',
-    siteName: 'aicompliance',
-    siteKey: 'aicompliance',
-    annualDiscountMultiplier: typeof ANNUAL_DISCOUNT_MULTIPLIER !== 'undefined'
-      ? ANNUAL_DISCOUNT_MULTIPLIER
-      : (typeof annualBillingMultiplier !== 'undefined' ? annualBillingMultiplier : 0.5),
-  })
-}
-
-export function handleRuntime(requestUrl = new URL(CANONICAL_ORIGIN)) {
-  return jsonResponse({
-    ok: true,
-    publicAppOrigin: resolvePublicAppOrigin(requestUrl),
-    deployment: 'cloudflare-workers-assets',
-    paymentProvider: 'nowpayments',
-    ts: Date.now(),
-  })
-}
-
-export async function handleScan(request) {
-  if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed.' }, 405)
-  try {
-    const body = await request.json()
-    return jsonResponse({ ok: true, result: classifyAiSystem(body || {}) })
-  } catch {
-    return jsonResponse({ ok: false, error: 'Invalid JSON body.' }, 400)
+async function handleCheckout(request, env, requestUrl) {
+  if (request.method !== 'POST') {
+    return jsonResponse({ ok: false, error: 'Method not allowed.' }, 405, request)
   }
-}
 
-function sanitizeAnalyticsValue(value, max = 180) {
-  return String(value ?? '')
-    .replace(/[^\w .:/?=&@+-]/g, '')
-    .slice(0, max)
-}
+  const apiKey = await firstSecretEnv(env, 'API_PROD_KEY', 'POLAR_API_KEY', 'POLAR_KEY')
+  if (!apiKey) {
+    return jsonResponse({ ok: false, error: 'Payment is not configured yet.' }, 503, request)
+  }
 
-async function persistEvent(env, event) {
-  await recordAnalyticsEvents(env, [event], {
-    siteKey: event.site || 'unknown',
-    requestUrl: new URL(CANONICAL_ORIGIN),
-  })
-}
-
-export async function handleReminder(request, env) {
-  if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed.' }, 405)
-
-  let body = {}
+  let body
   try {
     body = await request.json()
   } catch {
-    body = {}
+    return jsonResponse({ ok: false, error: 'Invalid JSON body.' }, 400, request)
   }
 
-  const email = sanitizeAnalyticsValue(body.email || '', 160)
-  const systemName = sanitizeAnalyticsValue(body.systemName || '', 140)
-  if (!email || !email.includes('@')) return jsonResponse({ ok: false, error: 'A valid email is required.' }, 400)
+  const requestedPlanId = typeof body?.planId === 'string' ? body.planId : 'pro'
+  const planId = requestedPlanId === 'starter' ? 'starter' : 'pro'
+  const billing = body?.billing === 'monthly' ? 'monthly' : 'annual'
+  const plan = planCatalog[planId]
+  const successUrl = `${resolvePublicAppOrigin(requestUrl)}/checkout/done`
 
-  const event = {
-    site: 'aicompliance.online',
-    type: 'reminder_request',
-    email,
-    systemName,
-    ts: Date.now(),
+  try {
+    const productId = await getOrCreatePolarProduct(env, apiKey, plan, billing, successUrl)
+    const checkout = await requestPolarJson(apiKey, `${resolvePolarBase(env)}/v1/checkouts`, {
+      product_id: productId,
+      units: 1,
+      success_url: successUrl,
+      request_id: `voiceaiagent_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      metadata: {
+        site: 'voiceaiagent.space',
+        planId: plan.id,
+        billing,
+        defaultPlan: plan.id === 'pro',
+      },
+    })
+    const checkoutUrl = extractCheckoutUrl(checkout)
+    if (!checkoutUrl) throw new Error('Polar did not return a checkout URL.')
+    return jsonResponse({ ok: true, checkoutUrl }, 200, request)
+  } catch (error) {
+    console.log(JSON.stringify({ type: 'checkout_error', site: 'voiceaiagent.space', message: String(error?.message || error) }))
+    return jsonResponse({ ok: false, error: 'Secure checkout could not be created yet.' }, 502, request)
   }
-  console.log(JSON.stringify(event))
-  await persistEvent(env, event)
-  return jsonResponse({ ok: true, message: 'Reminder request captured.' })
 }
 
-export async function handleAnalytics(request, env) {
-  if (request.method !== 'POST') return jsonResponse({ ok: false, error: 'Method not allowed.' }, 405)
+function handleRuntime(request, requestUrl) {
+  return jsonResponse(
+    {
+      ok: true,
+      publicAppOrigin: resolvePublicAppOrigin(requestUrl),
+      deployment: 'cloudflare-workers-assets',
+      paymentProvider: 'polar',
+      defaultPlan: 'pro',
+      defaultBilling: 'annual',
+      annualDiscount: '50%',
+      analytics: 'cloudflare-d1',
+      ts: Date.now(),
+    },
+    200,
+    request,
+  )
+}
 
-  let body = {}
+async function handleAnalytics(request, env) {
+  if (request.method !== 'POST') {
+    return jsonResponse({ ok: false, error: 'Method not allowed.' }, 405, request)
+  }
+
+  let body
   try {
     body = await request.json()
   } catch {
-    body = {}
+    return jsonResponse({ ok: false, error: 'Invalid JSON body.' }, 400, request)
   }
 
-  const event = {
-    site: 'aicompliance.online',
-    type: 'analytics',
-    event: sanitizeAnalyticsValue(body.event || 'unknown', 80),
-    path: sanitizeAnalyticsValue(body.path || '/', 220),
-    route: sanitizeAnalyticsValue(body.route || '', 220),
-    riskLevel: sanitizeAnalyticsValue(body.riskLevel || '', 40),
-    planId: sanitizeAnalyticsValue(body.planId || '', 40),
-    billing: sanitizeAnalyticsValue(body.billing || '', 40),
-    utm: body.utm && typeof body.utm === 'object' ? body.utm : {},
-    ts: Date.now(),
-  }
+  const events = Array.isArray(body?.events) ? body.events.slice(0, 40) : []
+  const acceptedEvents = events.filter((event) => event && typeof event.id === 'string' && typeof event.name === 'string')
+  const country = request.headers.get('CF-IPCountry') || null
+  const userAgent = request.headers.get('User-Agent') || null
+  const receivedAt = new Date().toISOString()
 
-  console.log(JSON.stringify({ type: 'aicompliance_analytics', ...event }))
+  let persisted = false
+  let store = 'console'
   try {
-    await persistEvent(env, event)
-  } catch {
-    console.log(JSON.stringify({ type: 'aicompliance_analytics_persist_error', ts: Date.now() }))
+    const result = await recordAnalyticsEvents(env, acceptedEvents, {
+      siteKey: 'voiceaiagent',
+      requestUrl: new URL(request.url),
+    })
+    persisted = result.persisted
+    store = persisted ? 'd1' : 'console'
+  } catch (error) {
+    console.log(JSON.stringify({ type: 'analytics_store_error', site: 'voiceaiagent.space', message: String(error?.message || error) }))
+    persisted = false
   }
-  return jsonResponse({ ok: true })
+
+  console.log(
+    JSON.stringify({
+      type: 'analytics',
+      site: 'voiceaiagent.space',
+      accepted: acceptedEvents.length,
+      persisted,
+      store,
+      country,
+      userAgent: userAgent ? userAgent.slice(0, 120) : null,
+    }),
+  )
+  return jsonResponse({ ok: true, accepted: acceptedEvents.length, persisted, store }, 202, request)
 }
 
-export function buildSitemapXml() {
+function buildSitemapXml() {
   const today = new Date().toISOString().slice(0, 10)
   const urls = indexablePaths
     .map((path) => {
-      const priority = path === '/' ? '1.0' : path === '/privacy' || path === '/terms' ? '0.35' : '0.78'
-      const changefreq = path === '/' ? 'weekly' : 'monthly'
-      const locPath = path === '/' ? '/' : `${path}/`
+      const priority = path === '/' ? '1.0' : path === '/privacy' || path === '/terms' ? '0.4' : path === '/pricing' ? '0.9' : '0.78'
+      const changefreq = path === '/' || path === '/pricing' ? 'weekly' : 'monthly'
+      const canonicalPath = path === '/' ? '/' : `${path}/`
       return `  <url>
-    <loc>${CANONICAL_ORIGIN}${locPath}</loc>
+    <loc>${LIVE_ORIGIN}${canonicalPath}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
@@ -346,20 +367,31 @@ ${urls}
 </urlset>`
 }
 
-export function handleSitemap() {
-  return xmlResponse(buildSitemapXml())
+function handleSitemap(request) {
+  const headers = securityHeaders(request)
+  headers.set('Content-Type', 'application/xml; charset=utf-8')
+  headers.set('Cache-Control', 'public, max-age=3600')
+  return new Response(buildSitemapXml(), { status: 200, headers })
 }
 
-export function buildRobotsTxt() {
-  return `User-agent: *
+function handleRobots(request) {
+  const headers = securityHeaders(request)
+  headers.set('Content-Type', 'text/plain; charset=utf-8')
+  headers.set('Cache-Control', 'public, max-age=3600')
+  const body = `User-agent: *
 Allow: /
 Disallow: /api/
-Sitemap: ${CANONICAL_ORIGIN}/sitemap.xml
+Disallow: /checkout/done
+Sitemap: ${LIVE_ORIGIN}/sitemap.xml
 `
+  return new Response(body, { status: 200, headers })
 }
 
-export function handleRobots() {
-  return textResponse(buildRobotsTxt())
+function handleIndexNowKey(request) {
+  const headers = securityHeaders(request)
+  headers.set('Content-Type', 'text/plain; charset=utf-8')
+  headers.set('Cache-Control', 'public, max-age=86400')
+  return new Response(INDEXNOW_KEY, { status: 200, headers })
 }
 
 function noIndexNotFoundResponse(request) {
@@ -371,55 +403,53 @@ function noIndexNotFoundResponse(request) {
 }
 
 async function fetchAsset(request, env) {
-  if (env?.ASSETS?.fetch) {
+  if (env?.SITE_ASSETS?.fetch) {
     const requestUrl = new URL(request.url)
     const normalizedPath = requestUrl.pathname.replace(/\/+$/, '') || '/'
 
     if (staticAssetPaths.has(normalizedPath)) {
       const assetUrl = new URL(request.url)
       assetUrl.pathname = normalizedPath === '/' ? '/' : `${normalizedPath}/`
-      const assetResponse = await env.ASSETS.fetch(new Request(assetUrl.toString(), request))
-      if (assetResponse.status !== 404) return withSecurityHeaders(assetResponse)
+      const assetResponse = await env.SITE_ASSETS.fetch(new Request(assetUrl.toString(), request))
+      if (assetResponse.status !== 404) return assetResponse
     }
 
-    if (normalizedPath !== '/' && !/\.[a-z0-9]+$/i.test(normalizedPath) && !staticAssetPaths.has(normalizedPath)) {
-      return noIndexNotFoundResponse(request)
-    }
-
-    return withSecurityHeaders(await env.ASSETS.fetch(request))
+    return env.SITE_ASSETS.fetch(request)
   }
 
-  return new Response('Cloudflare ASSETS binding is unavailable.', {
+  return new Response('Cloudflare asset binding is unavailable.', {
     status: 500,
-    headers: securityHeaders(),
+    headers: securityHeaders(request),
   })
 }
 
 export async function handleRequest(request, env) {
   const requestUrl = new URL(request.url)
 
-  if (requestUrl.pathname === '/api/nowpayments-checkout' || requestUrl.pathname === '/api/checkout') {
-    return handleNowPaymentsCheckout(request, env, {
+  if (request.method === 'OPTIONS') return handleOptions(request)
+
+  if (requestUrl.pathname === '/api/polar-checkout') {
+    return handlePolarCheckout(request, env, {
       plans: planCatalog,
       defaultPlanId: 'pro',
-      siteName: 'aicompliance',
-      siteKey: 'aicompliance',
+      siteName: 'voiceaiagent',
+      siteKey: 'voiceaiagent',
       annualDiscountMultiplier: typeof ANNUAL_DISCOUNT_MULTIPLIER !== 'undefined'
         ? ANNUAL_DISCOUNT_MULTIPLIER
         : (typeof annualBillingMultiplier !== 'undefined' ? annualBillingMultiplier : 0.5),
     })
   }
 
-  if (requestUrl.pathname === '/api/runtime') return handleRuntime(requestUrl)
-  if (requestUrl.pathname === '/api/scan') return handleScan(request, env)
-  if (requestUrl.pathname === '/api/reminder') return handleReminder(request, env)
-  if (requestUrl.pathname === '/api/analytics') return handleAnalytics(request, env)
+  if (requestUrl.pathname === '/api/runtime') return handleRuntime(request, requestUrl)
+  if (requestUrl.pathname === '/api/checkout') return handleCheckout(request, env, requestUrl)
+  if (requestUrl.pathname === '/api/analytics/events') return handleAnalytics(request, env)
 
-  const httpsRedirect = maybeRedirectToHttps(requestUrl, request)
-  if (httpsRedirect) return httpsRedirect
+  const redirect = maybeRedirectToHttps(requestUrl)
+  if (redirect) return redirect
 
-  if (requestUrl.pathname === '/sitemap.xml') return handleSitemap()
-  if (requestUrl.pathname === '/robots.txt') return handleRobots()
+  if (requestUrl.pathname === '/sitemap.xml') return handleSitemap(request)
+  if (requestUrl.pathname === '/robots.txt') return handleRobots(request)
+  if (requestUrl.pathname === `/${INDEXNOW_KEY}.txt`) return handleIndexNowKey(request)
 
   return fetchAsset(request, env)
 }
@@ -428,8 +458,9 @@ export default {
   async fetch(request, env) {
     try {
       return await handleRequest(request, env)
-    } catch {
-      return jsonResponse({ ok: false, error: 'Internal server error.' }, 500)
+    } catch (error) {
+      console.log(JSON.stringify({ type: 'worker_error', site: 'voiceaiagent.space', message: String(error?.message || error) }))
+      return jsonResponse({ ok: false, error: 'Internal server error.' }, 500, request)
     }
   },
 }
